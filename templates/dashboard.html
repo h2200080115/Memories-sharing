@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Friend Trip{% endblock %}
+
+{% block content %}
+<div class="flex-between mb-4">
+    <h1>Your Trips</h1>
+    <div class="nav-controls">
+        <a href="{{ url_for('join_trip') }}" class="btn btn-outline">+ Join Trip</a>
+        <a href="{{ url_for('create_trip') }}" class="btn btn-primary">+ Create Trip</a>
+    </div>
+</div>
+
+<div class="grid">
+    {% for trip in trips %}
+    <a href="{{ url_for('view_trip', trip_id=trip.id) }}" class="card">
+        <div class="card-image-wrapper">
+            <div
+                style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; background: linear-gradient(45deg, var(--primary), #818cf8); color: white; font-size: 2rem; font-weight: bold;">
+                {{ trip.name[0] | upper }}
+            </div>
+        </div>
+        <div class="card-content">
+            <h3 class="card-title">{{ trip.name }}</h3>
+            <p class="card-meta">Code: <strong>{{ trip.code }}</strong></p>
+            <p class="card-meta">{{ trip.members|length }} Members</p>
+        </div>
+    </a>
+    {% else %}
+    <div style="grid-column: 1/-1; text-align: center; padding: 4rem; color: var(--text-muted);">
+        <p>You haven't joined any trips yet.</p>
+        <div class="mt-4">
+            <a href="{{ url_for('create_trip') }}" class="btn btn-primary">Create Your First Trip</a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

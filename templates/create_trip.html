@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block title %}Create Trip - Friend Trip{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="mb-4 text-center">
+        <h1>Create a New Trip</h1>
+        <p class="text-muted">Start a new shared album for you and your friends.</p>
+    </div>
+
+    <form method="POST">
+        <div class="form-group">
+            <label for="name" class="form-label">Trip Name</label>
+            <input type="text" id="name" name="name" class="form-input" placeholder="e.g. Goa 2024" required autofocus>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%">Create Trip</button>
+    </form>
+
+    <div class="mt-4 text-center">
+        <a href="{{ url_for('index') }}" class="btn btn-ghost">Cancel</a>
+    </div>
+</div>
+{% endblock %}

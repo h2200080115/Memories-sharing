@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('index') }}" class="btn btn-ghost" style="padding-left: 0">
+        &larr; Back to Trips
+    </a>
+</div>
+
+<div class="flex-between mb-4">
+    <div>
+        <h1>{{ trip.name }}</h1>
+        <p style="color: var(--text-muted)">Code: <strong
+                style="user-select: all; background: var(--border); padding: 0.2rem 0.5rem; border-radius: 4px;">{{
+                trip.code }}</strong> (Share this!)</p>
+    </div>
+
+    <button class="btn btn-primary" id="triggerUpload">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+        </svg>
+        Upload Photos
+    </button>
+    <input type="file" id="fileInput" multiple accept="image/*" style="display: none">
+</div>
+
+<div class="upload-zone mt-4" id="uploadZone" style="display:none">
+    <p>Drop photos here or click to select</p>
+    <div id="uploadProgress" class="mt-4" style="color: var(--text-muted); font-size: 0.9rem;"></div>
+</div>
+
+<div class="grid">
+    {% for album in albums %}
+    <a href="{{ url_for('view_album_details', album_id=album.id) }}" class="card">
+        <div class="card-image-wrapper">
+            {% if album.cover %}
+            <img src="{{ url_for('static', filename='uploads/' + album.cover) }}" alt="Cover" class="card-image"
+                loading="lazy">
+            {% else %}
+            <div
+                style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; background: var(--border); color: var(--text-muted);">
+                No Photos</div>
+            {% endif %}
+        </div>
+        <div class="card-content">
+            <h3 class="card-title">{{ album.owner }}</h3>
+            <p class="card-meta">{{ album.photo_count }} photos</p>
+        </div>
+    </a>
+    {% else %}
+    <div style="grid-column: 1/-1; text-align: center; padding: 4rem; color: var(--text-muted);">
+        <p>No photos in this trip yet. Start uploading!</p>
+    </div>
+    {% endfor %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const triggerBtn = document.getElementById('triggerUpload');
+    const fileInput = document.getElementById('fileInput');
+    const uploadZone = document.getElementById('uploadZone');
+    const uploadProgress = document.getElementById('uploadProgress');
+    const tripId = {{ trip.id }};
+
+    triggerBtn.addEventListener('click', () => {
+        fileInput.click();
+    });
+
+    fileInput.addEventListener('change', handleUpload);
+
+    async function handleUpload(e) {
+        const files = e.target.files;
+        if (!files.length) return;
+
+        uploadZone.style.display = 'block';
+        uploadProgress.textContent = `Uploading ${files.length} photos...`;
+
+        const formData = new FormData();
+        for (let i = 0; i < files.length; i++) {
+            formData.append('photos', files[i]);
+        }
+
+        try {
+            const response = await fetch(`/trip/${tripId}/upload`, {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                uploadProgress.textContent = `Success! ${result.count} photos uploaded. Reloading...`;
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                uploadProgress.textContent = `Error: ${result.error}`;
+            }
+        } catch (err) {
+            uploadProgress.textContent = 'Upload failed. Please try again.';
+            console.error(err);
+        }
+    }
+</script>
+{% endblock %}

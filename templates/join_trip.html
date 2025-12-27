@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+
+{% block title %}Join Trip - Friend Trip{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="mb-4 text-center">
+        <h1>Join a Trip</h1>
+        <p class="text-muted">Enter the 6-character code shared by your friend.</p>
+    </div>
+
+    <form method="POST">
+        <div class="form-group">
+            <label for="code" class="form-label">Trip Code</label>
+            <input type="text" id="code" name="code" class="form-input" placeholder="e.g. A1B2C3" maxlength="6"
+                style="text-transform: uppercase; letter-spacing: 0.2em; text-align: center;" required autofocus>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%">Join Trip</button>
+    </form>
+
+    <div class="mt-4 text-center">
+        <a href="{{ url_for('index') }}" class="btn btn-ghost">Cancel</a>
+    </div>
+</div>
+{% endblock %}
