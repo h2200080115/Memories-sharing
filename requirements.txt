@@ -3,3 +3,4 @@ flask-sqlalchemy
 Pillow
 werkzeug
 gunicorn
+psycopg2-binary
