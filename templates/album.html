@@ -18,16 +18,17 @@
         <button id="toggleSelectionBtn" class="btn btn-outline" onclick="toggleSelectionMode()">
             Select Photos
         </button>
-        <a href="{{ url_for('download_album', album_id=album_id) }}" class="btn btn-primary">
+        <button onclick="downloadAllPhotos()" class="btn btn-primary">
             Download All
-        </a>
+        </button>
     </div>
 </div>
 
 <div class="photo-grid" id="gallery">
     {% for photo in photos %}
     <div class="photo-item" data-index="{{ loop.index0 }}"
-        data-src="{{ url_for('static', filename='uploads/' + photo.filename) }}" data-id="{{ photo.id }}">
+        data-src="{{ url_for('static', filename='uploads/' + photo.filename) }}" data-id="{{ photo.id }}"
+        data-filename="{{ photo.filename }}">
         <div class="selection-overlay-bg"></div>
         <div class="photo-select-overlay">
             <input type="checkbox" class="photo-select-checkbox" value="{{ photo.id }}"
@@ -162,43 +163,61 @@
         });
     });
 
-    async function downloadSelected() {
-        const selected = Array.from(document.querySelectorAll('.photo-select-checkbox:checked')).map(cb => parseInt(cb.value));
-        if (!selected.length) return;
-
+    // Helper to download a single image
+    async function downloadImage(url, filename) {
         try {
-            const res = await fetch('/download/selected', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ photo_ids: selected })
-            });
-
-            if (res.ok) {
-                const contentType = res.headers.get('content-type');
-                if (contentType && contentType.includes('application/json')) {
-                    const data = await res.json();
-                    if (data.single && data.url) {
-                        window.location.href = data.url;
-                    }
-                } else {
-                    // Blob download
-                    const blob = await res.blob();
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'photos.zip';
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    a.remove();
-                }
-            } else {
-                alert('Download failed');
-            }
-        } catch (err) {
-            console.error(err);
-            alert('Download failed');
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const link = document.createElement('a');
+            link.href = window.URL.createObjectURL(blob);
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(link.href);
+        } catch (e) {
+            console.error("Failed to download", url, e);
         }
+    }
+
+    async function downloadAllPhotos() {
+        const photos = document.querySelectorAll('.photo-item');
+        if (photos.length === 0) {
+            alert("No photos to download!");
+            return;
+        }
+
+        if (!confirm(`Download ${photos.length} photos individually? This may prompt your browser to allow multiple downloads.`)) return;
+
+        let delay = 0;
+        for (const photo of photos) {
+            const src = photo.getAttribute('data-src');
+            const filename = photo.getAttribute('data-filename') || src.split('/').pop();
+
+            setTimeout(() => {
+                downloadImage(src, filename);
+            }, delay);
+            delay += 500; // 500ms delay between downloads to prevent choking
+        }
+    }
+
+    async function downloadSelected() {
+        const selectedCheckboxes = document.querySelectorAll('.photo-select-checkbox:checked');
+        if (selectedCheckboxes.length === 0) return;
+
+        if (!confirm(`Download ${selectedCheckboxes.length} photos individually?`)) return;
+
+        let delay = 0;
+        selectedCheckboxes.forEach(cb => {
+            const item = cb.closest('.photo-item');
+            const src = item.getAttribute('data-src');
+            const filename = item.getAttribute('data-filename') || src.split('/').pop();
+
+            setTimeout(() => {
+                downloadImage(src, filename);
+            }, delay);
+            delay += 500;
+        });
     }
 
     async function deleteSelected() {
