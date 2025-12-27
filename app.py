@@ -145,16 +145,30 @@ def signup():
             flash('Username already taken', 'error')
             return redirect(url_for('signup'))
 
-        user = User(mobile=mobile, username=username)
-        user.set_password(password)
-        db.session.add(user)
-        db.session.commit()
-        
-        session['username'] = username
-        session['user_id'] = user.id
-        return redirect(url_for('index'))
+        try:
+            user = User(mobile=mobile, username=username)
+            user.set_password(password)
+            db.session.add(user)
+            db.session.commit()
+            
+            session['username'] = username
+            session['user_id'] = user.id
+            return redirect(url_for('index'))
+        except Exception as e:
+            db.session.rollback()
+            print(f"Signup Error: {e}")
+            flash(f"Error creating account: {str(e)}", 'error')
+            return redirect(url_for('signup'))
 
     return render_template('signup.html')
+
+@app.route('/debug-db')
+def debug_db():
+    try:
+        db.session.execute(db.text('SELECT 1'))
+        return "Database connection successful! Tables: " + str(db.inspect(db.engine).get_table_names())
+    except Exception as e:
+        return f"Database connection failed: {str(e)}"
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
