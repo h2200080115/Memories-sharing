@@ -9,6 +9,8 @@ from flask import Flask, render_template, request, redirect, url_for, session, s
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
+import boto3
+from botocore.exceptions import ClientError
 
 # Configuration
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -31,10 +33,36 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max upload
 
+# AWS S3 Configuration
+app.config['S3_BUCKET'] = os.environ.get('S3_BUCKET')
+app.config['S3_KEY'] = os.environ.get('S3_KEY')
+app.config['S3_SECRET'] = os.environ.get('S3_SECRET')
+app.config['S3_REGION'] = os.environ.get('S3_REGION', 'us-east-1')
+
+s3 = boto3.client(
+    's3',
+    aws_access_key_id=app.config['S3_KEY'],
+    aws_secret_access_key=app.config['S3_SECRET'],
+    region_name=app.config['S3_REGION']
+)
+
 os.makedirs(os.path.join(BASE_DIR, 'instance'), exist_ok=True)
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# os.makedirs(UPLOAD_FOLDER, exist_ok=True) # No longer needed for S3
 
 db = SQLAlchemy(app)
+
+def get_s3_url(filename):
+    if not filename: return None
+    try:
+        url = s3.generate_presigned_url(
+            'get_object',
+            Params={'Bucket': app.config['S3_BUCKET'], 'Key': filename},
+            ExpiresIn=3600
+        )
+        return url
+    except ClientError as e:
+        print(f"Error generating S3 URL: {e}")
+        return None
 
 # --- Models ---
 
@@ -79,13 +107,17 @@ class Album(db.Model):
 
     def get_cover_photo(self):
         latest = Photo.query.filter_by(album_id=self.id).order_by(Photo.uploaded_at.desc()).first()
-        return latest.filename if latest else None
+        return get_s3_url(latest.filename) if latest else None
 
 class Photo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(120), nullable=False)
     album_id = db.Column(db.Integer, db.ForeignKey('album.id'), nullable=False)
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    @property
+    def url(self):
+        return get_s3_url(self.filename)
 
 # --- Helpers ---
 
@@ -99,17 +131,9 @@ def generate_trip_code():
         if not Trip.query.filter_by(code=code).first():
             return code
 
-def compress_image(file_path):
-    try:
-        with Image.open(file_path) as img:
-            img = img.convert('RGB')
-            if img.width > 1920:
-                ratio = 1920 / img.width
-                new_height = int(img.height * ratio)
-                img = img.resize((1920, new_height), Image.Resampling.LANCZOS)
-            img.save(file_path, optimize=True, quality=85)
-    except Exception as e:
-        print(f"Error compressing image: {e}")
+# def compress_image(file_path):
+#     # Compression logic would need to happen in-memory or temp file for S3
+#     pass
 
 # --- Routes ---
 
@@ -165,8 +189,15 @@ def signup():
 @app.route('/debug-db')
 def debug_db():
     try:
+        # Check DB
         db.session.execute(db.text('SELECT 1'))
-        return "Database connection successful! Tables: " + str(db.inspect(db.engine).get_table_names())
+        db_status = "Database connection successful! Tables: " + str(db.inspect(db.engine).get_table_names())
+        
+        # Check S3
+        s3.list_objects_v2(Bucket=app.config['S3_BUCKET'], MaxKeys=1)
+        s3_status = "S3 connection successful!"
+        
+        return f"{db_status}<br>{s3_status}"
     except Exception as e:
         return f"Database connection failed: {str(e)}"
 
@@ -296,19 +327,27 @@ def upload_to_trip(trip_id):
         db.session.commit()
 
     uploaded_count = 0
+    uploaded_count = 0
     for file in files:
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
             unique_filename = f"{trip.code}_{user.username}_{timestamp}_{filename}"
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
             
-            file.save(file_path)
-            # compress_image(file_path)
-            
-            photo = Photo(filename=unique_filename, album_id=album.id)
-            db.session.add(photo)
-            uploaded_count += 1
+            try:
+                s3.upload_fileobj(
+                    file,
+                    app.config['S3_BUCKET'],
+                    unique_filename,
+                    ExtraArgs={'ContentType': file.content_type}
+                )
+                
+                photo = Photo(filename=unique_filename, album_id=album.id)
+                db.session.add(photo)
+                uploaded_count += 1
+            except Exception as e:
+                print(f"Upload error: {e}")
+                continue
             
     db.session.commit()
     return jsonify({'success': True, 'count': uploaded_count})
@@ -346,9 +385,7 @@ def delete_photo(photo_id):
         return jsonify({'error': 'Permission denied'}), 403
         
     try:
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], photo.filename)
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        s3.delete_object(Bucket=app.config['S3_BUCKET'], Key=photo.filename)
         db.session.delete(photo)
         db.session.commit()
         return jsonify({'success': True})
@@ -358,8 +395,11 @@ def delete_photo(photo_id):
 @app.route('/download/photo/<int:photo_id>')
 def download_photo(photo_id):
     photo = Photo.query.get_or_404(photo_id)
-    # Check permissions (omitted for brevity, but should exist)
-    return send_from_directory(app.config['UPLOAD_FOLDER'], photo.filename, as_attachment=True)
+    # Redirect to presigned URL
+    url = get_s3_url(photo.filename)
+    if url:
+        return redirect(url)
+    return "Error generating download link", 500
 
 @app.route('/download/album/<int:album_id>')
 def download_album(album_id):
@@ -378,9 +418,12 @@ def download_album(album_id):
     memory_file = io.BytesIO()
     with zipfile.ZipFile(memory_file, 'w') as zf:
         for photo in photos:
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], photo.filename)
-            if os.path.exists(file_path):
-                zf.write(file_path, photo.filename)
+            try:
+                file_obj = s3.get_object(Bucket=app.config['S3_BUCKET'], Key=photo.filename)
+                file_content = file_obj['Body'].read()
+                zf.writestr(photo.filename, file_content)
+            except Exception as e:
+                print(f"Error zipping {photo.filename}: {e}")
     
     memory_file.seek(0)
     filename = f"{album.owner.username}_{album.trip.name}.zip"
@@ -420,9 +463,12 @@ def download_selected():
     memory_file = io.BytesIO()
     with zipfile.ZipFile(memory_file, 'w') as zf:
         for photo in photos:
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], photo.filename)
-            if os.path.exists(file_path):
-                zf.write(file_path, photo.filename)
+            try:
+                file_obj = s3.get_object(Bucket=app.config['S3_BUCKET'], Key=photo.filename)
+                file_content = file_obj['Body'].read()
+                zf.writestr(photo.filename, file_content)
+            except Exception as e:
+                print(f"Error zipping {photo.filename}: {e}")
     
     memory_file.seek(0)
     # We can't return a file directly in a JSON POST response usually without blob handling in JS.
@@ -459,9 +505,7 @@ def delete_selected():
         # Strict: Only owner can delete
         if photo.album.owner.id == user.id:
             try:
-                file_path = os.path.join(app.config['UPLOAD_FOLDER'], photo.filename)
-                if os.path.exists(file_path):
-                    os.remove(file_path)
+                s3.delete_object(Bucket=app.config['S3_BUCKET'], Key=photo.filename)
                 db.session.delete(photo)
                 deleted_count += 1
             except Exception as e:

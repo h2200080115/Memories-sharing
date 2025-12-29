@@ -26,8 +26,7 @@
 
 <div class="photo-grid" id="gallery">
     {% for photo in photos %}
-    <div class="photo-item" data-index="{{ loop.index0 }}"
-        data-src="{{ url_for('static', filename='uploads/' + photo.filename) }}" data-id="{{ photo.id }}"
+    <div class="photo-item" data-index="{{ loop.index0 }}" data-src="{{ photo.url }}" data-id="{{ photo.id }}"
         data-filename="{{ photo.filename }}">
         <div class="selection-overlay-bg"></div>
         <div class="photo-select-overlay">
@@ -35,8 +34,7 @@
                 onclick="event.stopPropagation(); updateActionbar()">
         </div>
 
-        <img src="{{ url_for('static', filename='uploads/' + photo.filename) }}" alt="Photo" class="photo-img"
-            loading="lazy">
+        <img src="{{ photo.url }}" alt="Photo" class="photo-img" loading="lazy">
         <div class="photo-overlay">
             <a href="{{ url_for('download_photo', photo_id=photo.id) }}" class="btn btn-primary" title="Download"
                 style="padding: 0.5rem; border-radius: 50%;" onclick="event.stopPropagation()">

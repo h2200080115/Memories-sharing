@@ -37,8 +37,7 @@
     <a href="{{ url_for('view_album_details', album_id=album.id) }}" class="card">
         <div class="card-image-wrapper">
             {% if album.cover %}
-            <img src="{{ url_for('static', filename='uploads/' + album.cover) }}" alt="Cover" class="card-image"
-                loading="lazy">
+            <img src="{{ album.cover }}" alt="Cover" class="card-image" loading="lazy">
             {% else %}
             <div
                 style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; background: var(--border); color: var(--text-muted);">
