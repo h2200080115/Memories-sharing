@@ -11,7 +11,6 @@ from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 import boto3
 from botocore.exceptions import ClientError
-import google.generativeai as genai
 
 # Configuration
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -46,14 +45,6 @@ s3 = boto3.client(
     aws_secret_access_key=app.config['S3_SECRET'],
     region_name=app.config['S3_REGION']
 )
-
-# Gemini Configuration
-app.config['GEMINI_API_KEY'] = os.environ.get('GEMINI_API_KEY')
-if app.config['GEMINI_API_KEY']:
-    genai.configure(api_key=app.config['GEMINI_API_KEY'])
-    model = genai.GenerativeModel('gemini-pro')
-else:
-    model = None
 
 os.makedirs(os.path.join(BASE_DIR, 'instance'), exist_ok=True)
 # os.makedirs(UPLOAD_FOLDER, exist_ok=True) # No longer needed for S3
@@ -103,23 +94,6 @@ class Trip(db.Model):
     members = db.relationship('User', secondary=user_trips, lazy='subquery',
         backref=db.backref('trips', lazy=True))
     albums = db.relationship('Album', backref='trip', lazy=True, cascade="all, delete-orphan")
-    messages = db.relationship('Message', backref='trip', lazy=True, cascade="all, delete-orphan")
-    story = db.relationship('Story', backref='trip', uselist=False, cascade="all, delete-orphan")
-
-class Message(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    trip_id = db.Column(db.Integer, db.ForeignKey('trip.id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    content = db.Column(db.String(500), nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    user = db.relationship('User', backref='messages')
-
-class Story(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    trip_id = db.Column(db.Integer, db.ForeignKey('trip.id'), nullable=False)
-    content = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 class Album(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -405,92 +379,7 @@ def view_trip(trip_id):
             'cover': cover
         })
         
-    return render_template('trip.html', trip=trip, albums=album_data, story=trip.story)
-
-@app.route('/trip/<int:trip_id>/messages')
-def get_trip_messages(trip_id):
-    if 'user_id' not in session:
-        return jsonify({'error': 'Unauthorized'}), 401
-    
-    trip = Trip.query.get_or_404(trip_id)
-    user = User.query.get(session['user_id'])
-    
-    if user not in trip.members:
-        return jsonify({'error': 'Not a member'}), 403
-        
-    # Get last 50 messages
-    messages = Message.query.filter_by(trip_id=trip.id).order_by(Message.timestamp).limit(50).all()
-    
-    return jsonify({
-        'messages': [{
-            'id': m.id,
-            'user': m.user.username,
-            'content': m.content,
-            'timestamp': m.timestamp.strftime('%H:%M')
-        } for m in messages],
-        'current_user': user.username
-    })
-
-@app.route('/trip/<int:trip_id>/message', methods=['POST'])
-def post_trip_message(trip_id):
-    if 'user_id' not in session:
-        return jsonify({'error': 'Unauthorized'}), 401
-    
-    data = request.get_json()
-    content = data.get('content', '').strip()
-    
-    if not content:
-        return jsonify({'error': 'Empty message'}), 400
-        
-    trip = Trip.query.get_or_404(trip_id)
-    user = User.query.get(session['user_id'])
-    
-    if user not in trip.members:
-        return jsonify({'error': 'Not a member'}), 403
-        
-    msg = Message(trip_id=trip.id, user_id=user.id, content=content)
-    db.session.add(msg)
-    db.session.commit()
-    
-    return jsonify({'success': True})
-
-@app.route('/trip/<int:trip_id>/generate_story', methods=['POST'])
-def generate_trip_story(trip_id):
-    if 'user_id' not in session:
-        return jsonify({'error': 'Unauthorized'}), 401
-        
-    if not model:
-        return jsonify({'error': 'AI service not configured'}), 503
-        
-    trip = Trip.query.get_or_404(trip_id)
-    
-    # Context for AI
-    member_names = [m.username for m in trip.members]
-    location_clues = [] # Could extract more if we had it
-    prompt = f"""
-    Write a short, funny, and heartwarming story (approx 200 words) about a trip named "{trip.name}".
-    The travelers are {', '.join(member_names)}.
-    They have shared {sum(len(a.photos) for a in trip.albums)} photos.
-    Make it sound like a legendary memory they will cherish.
-    """
-    
-    try:
-        response = model.generate_content(prompt)
-        story_text = response.text
-        
-        if trip.story:
-            trip.story.content = story_text
-            trip.story.created_at = datetime.utcnow()
-        else:
-            story = Story(trip_id=trip.id, content=story_text)
-            db.session.add(story)
-            
-        db.session.commit()
-        return jsonify({'success': True, 'story': story_text})
-        
-    except Exception as e:
-        print(f"Gemini Error: {e}")
-        return jsonify({'error': 'AI generation failed'}), 500
+    return render_template('trip.html', trip=trip, albums=album_data)
 
 @app.route('/trip/<int:trip_id>/upload', methods=['POST'])
 def upload_to_trip(trip_id):
