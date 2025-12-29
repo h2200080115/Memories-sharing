@@ -276,6 +276,31 @@ def join_trip():
         
     return render_template('join_trip.html')
 
+@app.route('/trip/<int:trip_id>/remove_member/<int:member_id>', methods=['POST'])
+def remove_member(trip_id, member_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    trip = Trip.query.get_or_404(trip_id)
+    current_user = User.query.get(session['user_id'])
+    
+    # Only trip creator can remove members
+    if trip.created_by_id != current_user.id:
+        return jsonify({'error': 'Only trip admin can remove members'}), 403
+        
+    member_to_remove = User.query.get_or_404(member_id)
+    
+    # Cannot remove yourself (the creator) via this route
+    if member_to_remove.id == current_user.id:
+        return jsonify({'error': 'Cannot remove yourself'}), 400
+        
+    if member_to_remove in trip.members:
+        trip.members.remove(member_to_remove)
+        db.session.commit()
+        return jsonify({'success': True})
+    
+    return jsonify({'error': 'User not in trip'}), 404
+
 @app.route('/trip/<int:trip_id>')
 def view_trip(trip_id):
     if 'user_id' not in session:
@@ -372,12 +397,16 @@ def view_album_details(album_id):
          return redirect(url_for('index'))
 
     photos = Photo.query.filter_by(album_id=album.id).order_by(Photo.uploaded_at.desc()).all()
+    # Check if current user is the trip creator
+    is_trip_creator = (user.id == album.trip.created_by_id)
+    
     return render_template('album.html', 
                           album_name=album.trip.name, 
                           owner_name=album.owner.username,
                           photos=photos,
                           trip_id=album.trip.id,
-                          album_id=album.id)
+                          album_id=album.id,
+                          is_trip_creator=is_trip_creator)
 
 @app.route('/delete/<int:photo_id>', methods=['POST'])
 def delete_photo(photo_id):
@@ -387,7 +416,11 @@ def delete_photo(photo_id):
     photo = Photo.query.get_or_404(photo_id)
     user = User.query.get(session['user_id'])
     
-    if photo.album.owner.id != user.id:
+    # Allow if user owns the photo OR user created the trip
+    is_creator = (photo.album.trip.created_by_id == user.id)
+    is_owner = (photo.album.owner.id == user.id)
+    
+    if not (is_owner or is_creator):
         return jsonify({'error': 'Permission denied'}), 403
         
     try:
@@ -508,8 +541,11 @@ def delete_selected():
     deleted_count = 0
     
     for photo in photos:
-        # Strict: Only owner can delete
-        if photo.album.owner.id == user.id:
+        # Check permissions for each photo
+        is_creator = (photo.album.trip.created_by_id == user.id)
+        is_owner = (photo.album.owner.id == user.id)
+        
+        if is_owner or is_creator:
             try:
                 s3.delete_object(Bucket=app.config['S3_BUCKET'], Key=photo.filename)
                 db.session.delete(photo)

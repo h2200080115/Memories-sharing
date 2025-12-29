@@ -27,6 +27,37 @@
     <input type="file" id="fileInput" multiple accept="image/*" style="display: none">
 </div>
 
+{% if trip.created_by_id == session.get('user_id') %}
+<div class="mb-4">
+    <details>
+        <summary style="cursor: pointer; color: var(--text-muted); padding: 0.5rem 0; font-weight: 500;">
+            Manage Members ({{ trip.members|length }})
+        </summary>
+        <div class="mt-2" style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+            {% for member in trip.members %}
+            <div
+                style="background: var(--card-bg); padding: 0.5rem 1rem; border-radius: 20px; border: 1px solid var(--border); display: flex; align-items: center; gap: 0.5rem;">
+                <span>{{ member.username }}</span>
+                {% if member.id != trip.created_by_id %}
+                <button onclick="removeMember({{ member.id }}, '{{ member.username }}')"
+                    style="background: none; border: none; color: #ef4444; cursor: pointer; padding: 0; display: flex; align-items: center;"
+                    title="Remove Member">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+                {% else %}
+                <span style="font-size: 0.8em; color: var(--text-muted);">(Admin)</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </details>
+</div>
+{% endif %}
+
 <div class="upload-zone mt-4" id="uploadZone" style="display:none">
     <p>Drop photos here or click to select</p>
     <div id="uploadProgress" class="mt-4" style="color: var(--text-muted); font-size: 0.9rem;"></div>
@@ -100,6 +131,27 @@
         } catch (err) {
             uploadProgress.textContent = 'Upload failed. Please try again.';
             console.error(err);
+        }
+    }
+
+    async function removeMember(memberId, username) {
+        if (!confirm(`Are you sure you want to remove ${username} from this trip?`)) return;
+
+        try {
+            const response = await fetch(`/trip/${tripId}/remove_member/${memberId}`, {
+                method: 'POST'
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                alert(`${username} removed.`);
+                location.reload();
+            } else {
+                alert(`Error: ${result.error}`);
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Failed to remove member');
         }
     }
 </script>
