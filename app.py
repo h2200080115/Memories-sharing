@@ -227,6 +227,15 @@ def debug_db():
     except Exception as e:
         return f"Database connection failed: {str(e)}"
 
+@app.route('/migrate-db')
+def migrate_db():
+    try:
+        with app.app_context():
+            db.create_all()
+        return "Database tables created successfully! <a href='/'>Go Home</a>"
+    except Exception as e:
+        return f"Migration failed: {e}"
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
