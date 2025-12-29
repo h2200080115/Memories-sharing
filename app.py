@@ -327,7 +327,8 @@ def upload_to_trip(trip_id):
         db.session.commit()
 
     uploaded_count = 0
-    uploaded_count = 0
+    errors = []
+    
     for file in files:
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
@@ -347,9 +348,14 @@ def upload_to_trip(trip_id):
                 uploaded_count += 1
             except Exception as e:
                 print(f"Upload error: {e}")
+                errors.append(str(e))
                 continue
             
     db.session.commit()
+    
+    if uploaded_count == 0 and errors:
+        return jsonify({'success': False, 'error': "Upload failed: " + "; ".join(errors)})
+        
     return jsonify({'success': True, 'count': uploaded_count})
 
 @app.route('/album/<int:album_id>')
