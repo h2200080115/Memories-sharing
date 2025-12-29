@@ -55,6 +55,12 @@
             {% endfor %}
         </div>
     </details>
+
+    <div style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+        <button onclick="deleteTrip()" class="btn btn-primary" style="background: #ef4444; width: 100%;">
+            Delete User Trip
+        </button>
+    </div>
 </div>
 {% endif %}
 
@@ -152,6 +158,35 @@
         } catch (err) {
             console.error(err);
             alert('Failed to remove member');
+        }
+    }
+
+    async function deleteTrip() {
+        if (!confirm('Are you sure you want to DELETE this entire trip? This action cannot be undone and will delete all photos permanently.')) return;
+
+        // Double confirmation for safety
+        const tripName = "{{ trip.name }}";
+        const check = prompt(`To confirm, please type the trip name: ${tripName}`);
+        if (check !== tripName) {
+            alert("Trip name did not match. Deletion cancelled.");
+            return;
+        }
+
+        try {
+            const response = await fetch(`/trip/${tripId}/delete`, {
+                method: 'POST'
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                alert('Trip deleted successfully.');
+                window.location.href = "{{ url_for('index') }}";
+            } else {
+                alert(`Error: ${result.error}`);
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Failed to delete trip');
         }
     }
 </script>

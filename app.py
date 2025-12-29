@@ -295,11 +295,54 @@ def remove_member(trip_id, member_id):
         return jsonify({'error': 'Cannot remove yourself'}), 400
         
     if member_to_remove in trip.members:
+        # 1. Find user's album in this trip
+        album = Album.query.filter_by(user_id=member_to_remove.id, trip_id=trip.id).first()
+        if album:
+            # 2. Delete all photos in album from S3
+            for photo in album.photos:
+                try:
+                    s3.delete_object(Bucket=app.config['S3_BUCKET'], Key=photo.filename)
+                except Exception as e:
+                    print(f"Error deleting photo {photo.id} from S3: {e}")
+            
+            # 3. Delete album (cascade will handle photos in DB)
+            db.session.delete(album)
+            
         trip.members.remove(member_to_remove)
         db.session.commit()
         return jsonify({'success': True})
     
     return jsonify({'error': 'User not in trip'}), 404
+
+@app.route('/trip/<int:trip_id>/delete', methods=['POST'])
+def delete_trip(trip_id):
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+        
+    trip = Trip.query.get_or_404(trip_id)
+    current_user = User.query.get(session['user_id'])
+    
+    if trip.created_by_id != current_user.id:
+        return jsonify({'error': 'Only trip admin can delete the trip'}), 403
+        
+    try:
+        # Delete all photos from S3 first
+        for album in trip.albums:
+            for photo in album.photos:
+                try:
+                    s3.delete_object(Bucket=app.config['S3_BUCKET'], Key=photo.filename)
+                except Exception as e:
+                    print(f"Error deleting photo {photo.id} from S3: {e}")
+        
+        # Delete trip (cascade will delete albums and photos from DB)
+        db.session.delete(trip)
+        db.session.commit()
+        
+        flash(f'Trip "{trip.name}" deleted successfully.', 'success')
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/trip/<int:trip_id>')
 def view_trip(trip_id):
