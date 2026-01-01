@@ -5,4 +5,4 @@ werkzeug
 gunicorn
 psycopg2-binary
 boto3
-google-generativeai
+google-genai

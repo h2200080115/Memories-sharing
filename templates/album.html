@@ -162,21 +162,16 @@
         });
     });
 
-    // Helper to download a single image
-    async function downloadImage(url, filename) {
-        try {
-            const response = await fetch(url);
-            const blob = await response.blob();
-            const link = document.createElement('a');
-            link.href = window.URL.createObjectURL(blob);
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(link.href);
-        } catch (e) {
-            console.error("Failed to download", url, e);
-        }
+    // Helper to download a single image via direct link (forced server-side)
+    function downloadImage(id) {
+        // Create a hidden anchor and click it to trigger native download
+        const link = document.createElement('a');
+        link.href = `/download/photo/${id}`;
+        link.target = '_self'; // Try _self first for WebView interception, or _blank
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     }
 
     async function downloadAllPhotos() {
@@ -186,17 +181,15 @@
             return;
         }
 
-        if (!confirm(`Download ${photos.length} photos individually? This may prompt your browser to allow multiple downloads.`)) return;
+        if (!confirm(`Download ${photos.length} photos individually?`)) return;
 
         let delay = 0;
         for (const photo of photos) {
-            const src = photo.getAttribute('data-src');
-            const filename = photo.getAttribute('data-filename') || src.split('/').pop();
-
+            const id = photo.getAttribute('data-id');
             setTimeout(() => {
-                downloadImage(src, filename);
+                downloadImage(id);
             }, delay);
-            delay += 500; // 500ms delay between downloads to prevent choking
+            delay += 1000; // Increased delay to 1s to ensure Android download manager catches up
         }
     }
 
@@ -209,13 +202,11 @@
         let delay = 0;
         selectedCheckboxes.forEach(cb => {
             const item = cb.closest('.photo-item');
-            const src = item.getAttribute('data-src');
-            const filename = item.getAttribute('data-filename') || src.split('/').pop();
-
+            const id = item.getAttribute('data-id');
             setTimeout(() => {
-                downloadImage(src, filename);
+                downloadImage(id);
             }, delay);
-            delay += 500;
+            delay += 1000;
         });
     }
 

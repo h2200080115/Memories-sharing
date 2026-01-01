@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+
+{% block title %}People - {{ trip.name }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('view_trip', trip_id=trip.id) }}" class="btn btn-ghost" style="padding-left: 0">
+        &larr; Back to Trip
+    </a>
+</div>
+
+<div class="flex-between mb-4">
+    <h1>People in {{ trip.name }}</h1>
+    <button id="scanBtn" class="btn btn-primary" onclick="scanFaces()">
+        Scan Faces for People
+    </button>
+</div>
+
+<div class="photo-grid" style="grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));">
+    {% for person in people %}
+    <a href="{{ url_for('view_person', person_id=person.id) }}" class="photo-item"
+        style="text-decoration: none; color: inherit;">
+        <div style="aspect-ratio: 1; overflow: hidden; border-radius: 12px; margin-bottom: 0.5rem;">
+            <img src="{{ person.cover_url }}" alt="{{ person.name }}"
+                style="width: 100%; height: 100%; object-fit: cover;">
+        </div>
+        <div style="text-align: center; font-weight: 500;">
+            {{ person.name }}
+        </div>
+        <div style="text-align: center; font-size: 0.8rem; color: var(--text-muted);">
+            {{ person.faces|length }} photos
+        </div>
+    </a>
+    {% else %}
+    <div style="grid-column: 1/-1; text-align: center; padding: 4rem; color: var(--text-muted);">
+        No people identified yet. Try scanning!
+    </div>
+    {% endfor %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function scanFaces() {
+        const btn = document.getElementById('scanBtn');
+        btn.disabled = true;
+        btn.textContent = 'Scanning... (This may take a while)';
+
+        try {
+            const res = await fetch("{{ url_for('scan_trip_faces', trip_id=trip.id) }}", { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                alert(data.message);
+            } else {
+                alert('Error: ' + data.error);
+                btn.disabled = false;
+                btn.textContent = 'Scan Faces for People';
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Request failed');
+            btn.disabled = false;
+            btn.textContent = 'Scan Faces for People';
+        }
+    }
+</script>
+{% endblock %}

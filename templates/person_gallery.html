@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ person.name }} - Friend Trip{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('view_people', trip_id=trip.id) }}" class="btn btn-ghost" style="padding-left: 0">
+        &larr; Back to People
+    </a>
+</div>
+
+<div class="flex-between mb-4" style="align-items: flex-start;">
+    <div>
+        <!-- Rename Form -->
+        <form action="{{ url_for('rename_person', person_id=person.id) }}" method="POST"
+            style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="text" name="name" value="{{ person.name }}" class="form-input"
+                style="font-size: 1.5rem; font-weight: 700; width: auto; min-width: 200px;">
+            <button type="submit" class="btn btn-outline" title="Save Name">Save</button>
+        </form>
+        <p style="color: var(--text-muted); margin-top: 0.5rem;">Found in {{ photos|length }} photos</p>
+    </div>
+</div>
+
+<div class="photo-grid">
+    {% for photo in photos %}
+    <div class="photo-item">
+        <img src="{{ photo.url }}" alt="Photo of {{ person.name }}" class="photo-img" loading="lazy">
+        <div class="photo-overlay">
+            <a href="{{ url_for('download_photo', photo_id=photo.id) }}" class="btn btn-primary" title="Download"
+                style="padding: 0.5rem; border-radius: 50%;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+            </a>
+            <!-- Link to Album -->
+            <a href="{{ url_for('view_album_details', album_id=photo.album_id) }}" class="btn btn-primary"
+                title="View in Album" style="padding: 0.5rem; border-radius: 50%;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+            </a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
