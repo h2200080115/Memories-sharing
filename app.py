@@ -12,26 +12,21 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import boto3
 from botocore.exceptions import ClientError
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 # Configuration
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 # ... (existing config)
 
 # Gemini Configuration
-genai.configure(api_key=os.environ.get('GEMINI_API_KEY'))
-generation_config = {
-  "temperature": 1,
-  "top_p": 0.95,
-  "top_k": 40,
-  "max_output_tokens": 8192,
-  "response_mime_type": "application/json",
-}
+# Using the key provided by the user safely as fallback
+API_KEY = os.environ.get('GEMINI_API_KEY') or 'AIzaSyB78pxlsSNGPc4BmxFNpuV52eVj_RuFFMQ'
 
-model = genai.GenerativeModel(
-  model_name="gemini-2.5-flash",
-  generation_config=generation_config,
-)
+# Initialize the client
+client = genai.Client(api_key=API_KEY)
+
+# Legacy model variable removal - we use client directly now
 
 s3 = boto3.client(
     's3',
